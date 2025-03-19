@@ -1,41 +1,50 @@
 import pygame
 import secrets
 
-# --- Konstanten (Alles Spitze spezifisch) ---
-SYMBOL_SIZE = 80
-NUM_REELS = 1
+# --- Konstanten (Layout & Aussehen) ---
+SYMBOL_SIZE = 90
 NUM_ROWS = 3
-# Erweitertes SYMBOLS-Array mit "halben" Symbolen
+TOWER_POS_X = 420
+TOWER_POS_Y = 150
+SYMBOL_SPACING_Y = 100
+
+NUM_REEL_SYMBOLS = 20 # Hinzugefügt: Definition für NUM_REEL_SYMBOLS
+REEL_SPEED = 10 # Hinzugefügt: Definition für REEL_SPEED
+SPIN_DURATION = 1500 # Hinzugefügt: Definition für SPIN_DURATION
+
 SYMBOLS = [
     "devil", "clover", "coin", "ladybug", "sun",
-    "devil_clover", "clover_coin", "coin_ladybug", "ladybug_sun", "sun_devil" #Halbe Symbole unten
+    "devil_clover", "clover_coin", "coin_ladybug", "ladybug_sun", "sun_devil"
 ]
-
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GREEN= (0, 255, 0)
-RED = (255, 0, 0)
-
 RISK_LADDER_STEPS = [0, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64, 100, 150, 250, "top"]
-
-# Angepasste SYMBOL_WEIGHTS (Beispiel - muss feinabgestimmt werden!)
 SYMBOL_WEIGHTS = [
-    0.25, 0.15, 0.12, 0.08, 0.03,  # Ganze Symbole
-    0.075, 0.075, 0.07, 0.06, 0.09  # Halbe Symbole (Summe muss 1 ergeben)
+    0.35, 0.20, 0.18, 0.12, 0.05,
+    0.025, 0.025, 0.025, 0.025, 0
 ]
 
 
-# --- Alles Spitze Klasse ---
 class AllesSpitze:
     def __init__(self, screen, font, rng):
         self.screen = screen
         self.font = font
         self.rng = rng
-        self.tower = ["devil", "devil", "devil"]
+        self.reel_strip = self.create_reel_strip()
+        self.reel_offset = 0
+        self.tower = ["blank"] * NUM_ROWS
         self.current_risk_level = 0
         self.game_state = "idle"
         self.last_win = 0
-        self.bet = 0
+        self.bet = 5
+        self.animation_frame = 0
+        self.animation_speed = 4
+        self.new_tower = []
+
+    def create_reel_strip(self):
+        """Erstellt einen längeren Reel Streifen mit gewichteten Symbolen."""
+        reel = []
+        for _ in range(NUM_REEL_SYMBOLS):
+            reel.append(self.weighted_choice(SYMBOLS, SYMBOL_WEIGHTS))
+        return reel
 
     def weighted_choice(self, choices, weights):
         total = sum(weights)
@@ -47,145 +56,152 @@ class AllesSpitze:
             upto += w
 
     def spin_tower(self):
-        """Simuliert das Drehen des Turms."""
-        new_tower = []
-        for _ in range(NUM_ROWS):
-            new_tower.append(self.weighted_choice(SYMBOLS, SYMBOL_WEIGHTS))
-        self.tower = new_tower
+        """Startet die Walzendrehung."""
+        self.game_state = "spinning"
+        self.spin_start_time = pygame.time.get_ticks()
 
-        # --- Gewinnlogik (angepasst für halbe Symbole) ---
+        # Wähle zufälligen Index für das Ziel-Symbol auf dem Reel Streifen
+        self.target_symbol_index = self.rng.randint(0, NUM_REEL_SYMBOLS - 1)
+        return None, 0
+
+
+    def animate_spin(self):
+        """Animiert die Walzendrehung."""
+        time_elapsed = pygame.time.get_ticks() - self.spin_start_time
+
+        if time_elapsed < SPIN_DURATION:
+            # Berechne Reel Offset basierend auf Zeit und Geschwindigkeit
+            self.reel_offset = (self.reel_offset + REEL_SPEED) % (SYMBOL_SIZE * NUM_REEL_SYMBOLS)
+            self.update_tower_from_reel()
+            return True
+        else:
+            self.game_state = "process_results"
+            self.process_spin_results()
+            return False
+
+
+    def update_tower_from_reel(self):
+        """Aktualisiert den sichtbaren Turm basierend auf dem Reel Offset."""
+        visible_symbols = []
+        start_index = (self.reel_offset // SYMBOL_SIZE)
+
+        for i in range(NUM_ROWS):
+            reel_index = (start_index + i) % NUM_REEL_SYMBOLS
+            visible_symbols.append(self.reel_strip[reel_index])
+
+        self.tower = visible_symbols
+        print(f"update_tower_from_reel: Tower Symbole: {self.tower}") # DEBUGGING
+
+
+    def process_spin_results(self):
+        """Wertet die Ergebnisse des Spins aus."""
         top_symbol = self.tower[0]
+        print(f"process_spin_results() aufgerufen. Top Symbol: {top_symbol}")  # DEBUGGING
 
-        if "_" in top_symbol:  # Halbes Symbol -> Kein Gewinn
+        if "_" in top_symbol:
+            print("Halbes Symbol - Kein Gewinn")
             self.last_win = 0
             self.game_state = "idle"
-            print(f"Spin Tower: Halbes Symbol - Kein Gewinn. Neuer Zustand: {self.game_state}")
             return False, 0
 
         if top_symbol == "devil":
+            print("Teufel - Kein Gewinn")
             self.last_win = 0
             self.current_risk_level = 0
             self.game_state = "idle"
-            print(f"Spin Tower: Teufel. Neuer Zustand: {self.game_state}")
             return False, 0
 
         if top_symbol == "sun":
+            print("Sonne - Gewinn!")
             self.current_risk_level = len(RISK_LADDER_STEPS) - 1
-            self.last_win = RISK_LADDER_STEPS[self.current_risk_level]
+            self.last_win = 250
             self.game_state = "won"
-            print(f"Spin Tower: Sonne. Neuer Zustand: {self.game_state}")
             return True, self.last_win
 
         if top_symbol in ["clover", "coin", "ladybug"]:
-            if self.current_risk_level < len(RISK_LADDER_STEPS) - 1:
-                self.current_risk_level += 1
-            self.last_win = RISK_LADDER_STEPS[self.current_risk_level]
-            self.game_state = "risk_game"
-            print(f"Spin Tower: Gewinn. Neuer Zustand: {self.game_state}")
+            print(f"Symbol {top_symbol} - Gewinn!")
+            self.current_risk_level += 1
+            self.last_win = RISK_LADDER_STEPS[min(self.current_risk_level, len(RISK_LADDER_STEPS)-1)]
+            self.game_state = "won"
             return True, self.last_win
 
-        # Sollte nicht erreicht werden
+        print("Kein Gewinn-Kriterium erfüllt - Kein Gewinn (Fallback)")
         self.game_state = "idle"
         return False, 0
 
     def risk_game(self, choice):
-        """Führt das Risikospiel durch (unverändert)."""
-        print(f"Risk Game ({choice}): Aktueller Zustand: {self.game_state}")
-        if choice == "risk":
-            if self.rng.random() < 0.5:
-                if self.current_risk_level < len(RISK_LADDER_STEPS) - 1:
-                    self.current_risk_level += 1
-                self.last_win = RISK_LADDER_STEPS[self.current_risk_level]
-                if RISK_LADDER_STEPS[self.current_risk_level] == "top":
-                    self.game_state = "won"
-                print(f"Risk Game ({choice}): Neuer Zustand: {self.game_state}")
-                return True, self.last_win
-            else:
-                self.current_risk_level = 0
-                self.last_win = 0
-                self.game_state = "idle"
-                print(f"Risk Game ({choice}): Neuer Zustand: {self.game_state}")
-                return False, 0
-
-        elif choice == "collect":
-            self.game_state = "idle"
-            print(f"Risk Game ({choice}): Neuer Zustand: {self.game_state}")
-            return False, self.last_win
+        return False, 0
 
     def draw_tower(self):
-        """Zeichnet den Turm (angepasst für halbe Symbole)."""
-        y_offset = self.screen.get_height() - (NUM_ROWS * SYMBOL_SIZE) - 50
+        """Zeichnet den Turm als Walze."""
+        print("draw_tower() aufgerufen") # DEBUGGING
+        # Fensterrahmen zeichnen (NEU)
+        pygame.draw.rect(self.screen, (100, 0, 0), (TOWER_POS_X - SYMBOL_SIZE // 2 - 5, TOWER_POS_Y - SYMBOL_SIZE - 5, SYMBOL_SIZE + 10, NUM_ROWS * SYMBOL_SPACING_Y + 10), 3) # Rahmen um den Turm
 
-        for i, symbol in enumerate(self.tower):
-            if "_" in symbol:  # Halbes Symbol
-                # Teile den Symbolnamen in zwei Teile
+
+        for i in range(NUM_ROWS):
+            symbol = self.tower[i]
+            if symbol == "blank":
+                continue
+
+            y_pos = TOWER_POS_Y + i * SYMBOL_SPACING_Y
+
+            # Berechne Y-Offset für die Walzenbewegung
+            reel_draw_offset = self.reel_offset % SYMBOL_SIZE
+            y_draw_pos = y_pos - reel_draw_offset
+
+
+            if "_" in symbol:
                 symbol1, symbol2 = symbol.split("_")
                 img_path1 = f"images/{symbol1}.png"
                 img_path2 = f"images/{symbol2}.png"
-
                 try:
-                    # Lade beide Bilder
-                    img1 = pygame.image.load(img_path1)
+                    img1 = pygame.image.load(img_path1).convert_alpha()
                     img1 = pygame.transform.scale(img1, (SYMBOL_SIZE, SYMBOL_SIZE))
-                    img2 = pygame.image.load(img_path2)
+                    img2 = pygame.image.load(img_path2).convert_alpha()
                     img2 = pygame.transform.scale(img2, (SYMBOL_SIZE, SYMBOL_SIZE))
 
-                    # Zeichne die obere Hälfte von img1 und die untere Hälfte von img2
-                    self.screen.blit(img1, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE), area=(0, 0, SYMBOL_SIZE, SYMBOL_SIZE // 2))
-                    self.screen.blit(img2, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE + SYMBOL_SIZE // 2), area=(0, SYMBOL_SIZE // 2, SYMBOL_SIZE, SYMBOL_SIZE // 2))
+                    self.screen.blit(img2, (TOWER_POS_X - SYMBOL_SIZE // 2, y_draw_pos - SYMBOL_SIZE // 2))
+                    self.screen.blit(img1, (TOWER_POS_X - SYMBOL_SIZE // 2, y_draw_pos - SYMBOL_SIZE))
+                    print(f"Zeichne halbes Symbol: {symbol}") # DEBUGGING
 
-                except FileNotFoundError:
-                    # Fallback: Zeichne ein geteiltes Rechteck
-                    pygame.draw.rect(self.screen, RED, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE, SYMBOL_SIZE, SYMBOL_SIZE // 2))
-                    pygame.draw.rect(self.screen, BLUE, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE + SYMBOL_SIZE//2, SYMBOL_SIZE, SYMBOL_SIZE // 2))
-                    text1 = self.font.render(symbol1, True, BLACK)
-                    text2 = self.font.render(symbol2, True, BLACK)
-                    self.screen.blit(text1, (self.screen.get_width()//2 - text1.get_width()//2, y_offset + i * SYMBOL_SIZE))
-                    self.screen.blit(text2, (self.screen.get_width()//2 - text2.get_width()//2, y_offset + i*SYMBOL_SIZE + SYMBOL_SIZE//2))
+                except FileNotFoundError as e:
+                    print(f"Fehler beim Laden von Bildern für halbes Symbol {symbol}: {e}") # DEBUGGING
+                    pygame.draw.rect(self.screen, (255, 0, 0), (TOWER_POS_X - SYMBOL_SIZE // 2, y_draw_pos - SYMBOL_SIZE, SYMBOL_SIZE, SYMBOL_SIZE // 2))
+                    pygame.draw.rect(self.screen, (0, 0, 255), (TOWER_POS_X - SYMBOL_SIZE // 2, y_draw_pos - SYMBOL_SIZE // 2, SYMBOL_SIZE, SYMBOL_SIZE // 2))
+                    text1 = self.font.render(symbol1, True, (0, 0, 0))
+                    text2 = self.font.render(symbol2, True, (0, 0, 0))
+                    self.screen.blit(text1, (TOWER_POS_X - text1.get_width() // 2, y_draw_pos - SYMBOL_SIZE))
+                    self.screen.blit(text2, (TOWER_POS_X - text2.get_width() // 2, y_draw_pos - SYMBOL_SIZE // 2))
 
 
-            else:  # Ganzes Symbol (wie vorher)
+            else: #Ganze Symbole
                 img_path = f"images/{symbol}.png"
+                print(f"Lade Bild für ganzes Symbol: {symbol} Pfad: {img_path}") # DEBUGGING
                 try:
-                    img = pygame.image.load(img_path)
+                    img = pygame.image.load(img_path).convert_alpha()
                     img = pygame.transform.scale(img, (SYMBOL_SIZE, SYMBOL_SIZE))
-                    self.screen.blit(img, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE))
-                except FileNotFoundError:
-                    pygame.draw.rect(self.screen, RED, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE, SYMBOL_SIZE, SYMBOL_SIZE))
-                    text = self.font.render(symbol, True, BLACK)
-                    self.screen.blit(text, (self.screen.get_width() // 2 - text.get_width() // 2, y_offset + i * SYMBOL_SIZE + SYMBOL_SIZE // 2 - text.get_height() // 2))
+                    self.screen.blit(img, (TOWER_POS_X - SYMBOL_SIZE // 2, y_draw_pos - SYMBOL_SIZE))
+                except FileNotFoundError as e:
+                    print(f"Fehler beim Laden von Bild für ganzes Symbol {symbol}: {e}") # DEBUGGING
+                    pygame.draw.rect(self.screen, (255, 0, 0), (TOWER_POS_X - SYMBOL_SIZE // 2, y_draw_pos - SYMBOL_SIZE, SYMBOL_SIZE, SYMBOL_SIZE))
+                    text = self.font.render(symbol, True, (0, 0, 0))
+                    self.screen.blit(text, (TOWER_POS_X - text.get_width() // 2, y_draw_pos - SYMBOL_SIZE + (SYMBOL_SIZE - text.get_height()) // 2))
 
 
     def draw_risk_ladder(self):
-        """Zeichnet die Risikoleiter (unverändert)."""
-        x = 50
-        y_start = 100
-        y_step = 30
-
-        for i, value in enumerate(RISK_LADDER_STEPS):
-            color = WHITE
-            if i == self.current_risk_level:
-                color = GREEN
-
-            text = self.font.render(str(value), True, color)
-            self.screen.blit(text, (x, y_start + i * y_step))
+        pass
 
     def reset_game(self):
-        """Setzt das Spiel zurück."""
-        self.tower = ["devil", "devil", "devil"]
+        self.tower = ["blank"] * NUM_ROWS
         self.current_risk_level = 0
         self.game_state = "idle"
         self.last_win = 0
 
     def update(self):
-        """Aktualisiert die Spielanzeige."""
-        if self.game_state in ["spinning", "risk_game", "won"]:
-            self.draw_tower()
-            self.draw_risk_ladder()
+        """Aktualisiert den Spielzustand und die Anzeige."""
+        if self.game_state == "spinning":
+            if not self.animate_spin():
+                self.game_state = "idle"
 
-        if self.game_state == "risk_game":
-            risk_text = self.font.render("Risiko? (R) oder Sammeln? (C)", True, (255, 255, 255))
-            self.screen.blit(risk_text, (self.screen.get_width() // 2 - risk_text.get_width() // 2, 50))
-        elif self.game_state == "won":
-            win_text = self.font.render(f"Gewonnen: {self.last_win}", True, (0, 255, 0))
-            self.screen.blit(win_text, (self.screen.get_width() // 2 - win_text.get_width() // 2, 50))
+        self.draw_tower()
