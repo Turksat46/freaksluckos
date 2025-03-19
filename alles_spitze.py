@@ -11,6 +11,10 @@ SYMBOLS = [
     "devil_clover", "clover_coin", "coin_ladybug", "ladybug_sun", "sun_devil" #Halbe Symbole unten
 ]
 
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+
 RISK_LADDER_STEPS = [0, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64, 100, 150, 250, "top"]
 
 # Angepasste SYMBOL_WEIGHTS (Beispiel - muss feinabgestimmt werden!)
