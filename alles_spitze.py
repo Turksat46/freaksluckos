@@ -1,4 +1,4 @@
-import pygame
+import pygame  # Stelle sicher, dass pygame importiert ist
 import secrets
 
 # --- Konstanten (Alles Spitze spezifisch) ---
@@ -20,7 +20,6 @@ class AllesSpitze:
         self.game_state = "idle"  # "idle", "spinning", "risk_game", "won"
         self.last_win = 0
         self.bet = 0  # Einsatz hinzugefügt
-
 
     def weighted_choice(self, choices, weights):
         """Wählt ein Element aus einer Liste mit gewichteten Wahrscheinlichkeiten."""
@@ -44,22 +43,26 @@ class AllesSpitze:
         if top_symbol == "blank":
             self.last_win = 0
             self.game_state = "idle"
+            print(f"Spin Tower: Neuer Zustand: {self.game_state}")  # Debug
             return False, 0
 
         if top_symbol == "joker":
             self.current_risk_level = len(RISK_LADDER_STEPS) - 1
             self.last_win = RISK_LADDER_STEPS[self.current_risk_level]
             self.game_state = "won"
+            print(f"Spin Tower: Neuer Zustand: {self.game_state}")  # Debug
             return True, self.last_win
 
         if self.current_risk_level < len(RISK_LADDER_STEPS) - 1:
             self.current_risk_level += 1
         self.last_win = RISK_LADDER_STEPS[self.current_risk_level]
         self.game_state = "risk_game"
+        print(f"Spin Tower: Neuer Zustand: {self.game_state}")  # Debug
         return True, self.last_win
 
     def risk_game(self, choice):
         """Führt das Risikospiel durch."""
+        print(f"Risk Game ({choice}): Aktueller Zustand: {self.game_state}")  # Debug
         if choice == "risk":
             if self.rng.random() < 0.5:  # 50/50 Chance
                 if self.current_risk_level < len(RISK_LADDER_STEPS) - 1:
@@ -67,31 +70,34 @@ class AllesSpitze:
                 self.last_win = RISK_LADDER_STEPS[self.current_risk_level]
                 if RISK_LADDER_STEPS[self.current_risk_level] == "top":
                     self.game_state = "won"
-                return True, self.last_win #Rückgabe ob gewonnen und wie viel.
+                print(f"Risk Game ({choice}): Neuer Zustand: {self.game_state}")  # Debug
+                return True, self.last_win  # Rückgabe ob gewonnen und wie viel.
             else:
                 self.current_risk_level = 0
                 self.last_win = 0
                 self.game_state = "idle"
+                print(f"Risk Game ({choice}): Neuer Zustand: {self.game_state}")  # Debug
                 return False, 0
 
         elif choice == "collect":
             self.game_state = "idle"
+            print(f"Risk Game ({choice}): Neuer Zustand: {self.game_state}") # Debug
             return False, self.last_win #Rückgabe: Nicht gewonnen, aber Gewinn einsammeln
-
 
     def draw_tower(self):
         """Zeichnet den Turm."""
         y_offset = self.screen.get_height() - (NUM_ROWS * SYMBOL_SIZE) - 50
         for i, symbol in enumerate(self.tower):
-            if symbol != "blank":
-                img_path = f"images/{symbol}.png"
+            # if symbol != "blank": #Diese Zeile auskommentieren
+                img_path = f"images/{symbol}.png"  # Beispielpfad
                 try:
                     img = pygame.image.load(img_path)
                     img = pygame.transform.scale(img, (SYMBOL_SIZE, SYMBOL_SIZE))
                     self.screen.blit(img, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE))
                 except FileNotFoundError:
-                    pygame.draw.rect(self.screen, (255, 0, 0), (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE, SYMBOL_SIZE, SYMBOL_SIZE))
-                    text = self.font.render(symbol, True, (0, 0, 0))
+                    # Fallback: Zeichne ein Rechteck mit Text + FARBEN
+                    pygame.draw.rect(self.screen, RED, (self.screen.get_width() // 2 - SYMBOL_SIZE // 2, y_offset + i * SYMBOL_SIZE, SYMBOL_SIZE, SYMBOL_SIZE))
+                    text = self.font.render(symbol, True, BLACK)  # BLACK auf RED
                     self.screen.blit(text, (self.screen.get_width() // 2 - text.get_width() // 2, y_offset + i * SYMBOL_SIZE + SYMBOL_SIZE // 2 - text.get_height() // 2))
 
     def draw_risk_ladder(self):
@@ -101,9 +107,9 @@ class AllesSpitze:
         y_step = 30
 
         for i, value in enumerate(RISK_LADDER_STEPS):
-            color = (255, 255, 255)
+            color = WHITE  # Immer WHITE, außer aktuell
             if i == self.current_risk_level:
-                color = (0, 255, 0)
+                color = GREEN
 
             text = self.font.render(str(value), True, color)
             self.screen.blit(text, (x, y_start + i * y_step))
@@ -114,7 +120,6 @@ class AllesSpitze:
         self.current_risk_level = 0
         self.game_state = "idle"
         self.last_win = 0
-
 
     def update(self):
         """Aktualisiert die Spielanzeige (delegiert an Unterfunktionen)."""

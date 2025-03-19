@@ -37,14 +37,13 @@ class State:
     ERROR = 3  # Fehlerzustand hinzugefügt
 
 current_state = State.IDLE
-credit = 0
-
+credit = 500
 
 # --- Zufallsgenerator ---
 rng = secrets.SystemRandom()
 
 # --- Spiele-Instanz erstellen ---
-spiel = alles_spitze.AllesSpitze(screen, font, rng) # Übergabe von screen, font, und rng
+spiel = alles_spitze.AllesSpitze(screen, font, rng)  # Übergabe von screen, font, und rng
 
 # --- Funktionen für Ein-/Auszahlung (Platzhalter, unverändert) ---
 def insert_coin(amount):
@@ -70,7 +69,7 @@ def update_display():
     screen.blit(credit_text, (10, 10))
 
     if current_state == State.PLAYING:
-         spiel.update() #Ruft die Update Methode des Spiels auf.
+        spiel.update()  # Immer aufrufen, wenn im Spielzustand
 
     pygame.display.flip()
 
@@ -88,14 +87,13 @@ while running:
                 if spiel.game_state == "risk_game":
                     if event.key == pygame.K_r:
                         won, amount = spiel.risk_game("risk")
-                        if not won and amount == 0: #Verloren, zurück
-                           current_state = State.IDLE
-
+                        if not won and amount == 0:  # Verloren, zurück
+                            current_state = State.IDLE
 
                     elif event.key == pygame.K_c:
-                        won, amount = spiel.risk_game("collect") #Gewinn einsammeln
-                        credit += amount #Gewinn hinzufügen
-                        current_state = State.IDLE #Zurück
+                        won, amount = spiel.risk_game("collect")  # Gewinn einsammeln
+                        credit += amount  # Gewinn hinzufügen
+                        current_state = State.IDLE  # Zurück
 
             if event.key == pygame.K_SPACE:
                 if current_state == State.IDLE:
@@ -104,8 +102,8 @@ while running:
                         credit -= spiel.bet
                         current_state = State.PLAYING
                         spiel.game_state = "spinning"
-                        won, amount = spiel.spin_tower() #Rückgabewerte für Gewinn/Verlust
-                        if not won: #Verloren
+                        won, amount = spiel.spin_tower()  # Rückgabewerte für Gewinn/Verlust
+                        if not won:  # Verloren
                             current_state = State.IDLE
                 elif spiel.game_state == "won":  # Bei Gewinn, nach Leertaste, zurück
                     credit += spiel.last_win  # Gewinn einsammeln
@@ -120,21 +118,18 @@ while running:
                     current_state = State.PLAYING
                     spiel.game_state = "spinning"
                     won, amount = spiel.spin_tower()
-                    if not won: #Verloren
+                    if not won:  # Verloren
                         current_state = State.IDLE
 
-
-            elif spiel.game_state == "won": #Touch für Gewinn.
+            elif spiel.game_state == "won":  # Touch für Gewinn.
                 credit += spiel.last_win  # Gewinn einsammeln
                 spiel.reset_game()
                 current_state = State.IDLE
 
-
     if current_state == State.PLAYING:
         if credit < spiel.bet and spiel.game_state == "idle":
-          current_state = State.IDLE
-          logging.warning("Nicht genugend Guthaben")
-
+            current_state = State.IDLE
+            logging.warning("Nicht genugend Guthaben")
 
     # --- Hardware-Ereignisse (Platzhalter, unverändert) ---
     # hardware_event = get_hardware_event()
